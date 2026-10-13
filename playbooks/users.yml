@@ -1,0 +1,47 @@
+
+---
+- name: Configure restricted users
+  hosts: raspberry_pi
+  become: true
+
+  tasks:
+    - name: Create restricted user alice
+      ansible.builtin.user:
+        name: alice
+        comment: Restricted lab user
+        create_home: true
+        shell: /bin/bash
+        groups: []
+        append: false
+        state: present
+
+    - name: Install SSH public key for alice
+      ansible.posix.authorized_key:
+        user: alice
+        key: "{{ restricted_user_pubkey }}"
+        state: present
+
+    - name: Remove alice-specific sudoers file
+      ansible.builtin.file:
+        path: /etc/sudoers.d/alice
+        state: absent
+
+    - name: Ensure alice is not in the sudo group
+      ansible.builtin.user:
+        name: alice
+        groups: []
+        append: false
+        state: present
+
+    - name: Verify alice cannot escalate privileges without a password
+      ansible.builtin.command:
+        argv:
+          - sudo
+          - -u
+          - alice
+          - sudo
+          - -n
+          - id
+      register: alice_sudo_test
+      changed_when: false
+      failed_when: alice_sudo_test.rc == 0
