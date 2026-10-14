@@ -1,3 +1,11 @@
+Install the pinned Ansible collection dependency:
+
+```bash
+ansible-galaxy collection install -r requirements.yml
+```
+
+Then run the playbook:
+
 ```bash
 ansible-playbook -i inventory/hosts.yml playbooks/users.yml --private-key ~/.ssh/ChineseMuffin -K
 ```
