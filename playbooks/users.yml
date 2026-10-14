@@ -14,6 +14,7 @@
         groups: []
         append: false
         state: present
+      register: alice_user
 
     - name: Install SSH public key for alice
       ansible.posix.authorized_key:
@@ -48,7 +49,7 @@
 
     - name: Create systemd slice drop-in directory
       ansible.builtin.file:
-        path: /etc/systemd/system/user-1001.slice.d
+        path: "/etc/systemd/system/user-{{ alice_user.uid }}.slice.d"
         state: directory
         owner: root
         group: root
@@ -56,7 +57,7 @@
 
     - name: Configure resource limits for alice
       ansible.builtin.copy:
-        dest: /etc/systemd/system/user-1001.slice.d/50-resource-limits.conf
+        dest: "/etc/systemd/system/user-{{ alice_user.uid }}.slice.d/50-resource-limits.conf"
         owner: root
         group: root
         mode: "0644"
