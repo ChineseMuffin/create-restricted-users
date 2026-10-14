@@ -5,59 +5,66 @@
   become: true
 
   tasks:
-    - name: Create restricted user alice
+    - name: "Create restricted user {{ restricted_user }}"
       ansible.builtin.user:
-        name: alice
+        name: "{{ restricted_user }}"
         comment: Restricted lab user
         create_home: true
         shell: /bin/bash
         groups: []
         append: false
         state: present
-      register: alice_user
 
-    - name: Install SSH public key for alice
+    - name: "Install SSH public key for {{ restricted_user }}"
       ansible.posix.authorized_key:
-        user: alice
+        user: "{{ restricted_user }}"
         key: "{{ restricted_user_pubkey }}"
         state: present
+      when: not ansible_check_mode
 
-    - name: Remove alice-specific sudoers file
+    - name: "Remove sudoers file for {{ restricted_user }}"
       ansible.builtin.file:
-        path: /etc/sudoers.d/alice
+        path: "/etc/sudoers.d/{{ restricted_user }}"
         state: absent
 
-    - name: Ensure alice is not in the sudo group
+    - name: "Ensure {{ restricted_user }} is not in the sudo group"
       ansible.builtin.user:
-        name: alice
+        name: "{{ restricted_user }}"
         groups: []
         append: false
         state: present
 
-    - name: Verify alice cannot escalate privileges without a password
+    - name: "Verify {{ restricted_user }} cannot escalate privileges without a password"
       ansible.builtin.command:
         argv:
           - sudo
           - -u
-          - alice
+          - "{{ restricted_user }}"
           - sudo
           - -n
           - id
-      register: alice_sudo_test
+      register: restricted_user_sudo_test
       changed_when: false
-      failed_when: alice_sudo_test.rc == 0
+      failed_when: restricted_user_sudo_test.rc == 0
+
+    - name: "Get UID for {{ restricted_user }}"
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ restricted_user }}"
+        fail_key: "{{ not ansible_check_mode }}"
 
     - name: Create systemd slice drop-in directory
       ansible.builtin.file:
-        path: "/etc/systemd/system/user-{{ alice_user.uid }}.slice.d"
+        path: "/etc/systemd/system/user-{{ ansible_facts.getent_passwd[restricted_user][1] }}.slice.d"
         state: directory
         owner: root
         group: root
         mode: "0755"
+      when: ansible_facts.getent_passwd.get(restricted_user) is not none
 
-    - name: Configure resource limits for alice
+    - name: "Configure resource limits for {{ restricted_user }}"
       ansible.builtin.copy:
-        dest: "/etc/systemd/system/user-{{ alice_user.uid }}.slice.d/50-resource-limits.conf"
+        dest: "/etc/systemd/system/user-{{ ansible_facts.getent_passwd[restricted_user][1] }}.slice.d/50-resource-limits.conf"
         owner: root
         group: root
         mode: "0644"
@@ -67,6 +74,7 @@
           MemoryMax=512M
           TasksMax=100
       notify: Reload systemd
+      when: ansible_facts.getent_passwd.get(restricted_user) is not none
 
     - name: Enable memory cgroup in kernel command line
       ansible.builtin.replace:
